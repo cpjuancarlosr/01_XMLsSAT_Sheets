@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
+  <style>
+    #auth-button, #upload-button {
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 15px;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div style="padding: 20px;">
+    <h2>Cargador de CFDI XML</h2>
+    <p>Haz clic en el botón para seleccionar los archivos XML que deseas procesar desde tu Google Drive.</p>
+    <button id="auth-button" style="display: none;">Autorizar</button>
+    <button id="upload-button">Seleccionar Archivos</button>
+    <div id="status"></div>
+  </div>
+
+  <script type="text/javascript">
+    const DEVELOPER_KEY = 'YOUR_API_KEY'; // Reemplazar con tu API Key de Google Cloud
+    const APP_ID = 'YOUR_APP_ID'; // Reemplazar con tu App ID de Google Cloud
+    const SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
+    let token = null;
+
+    function onApiLoad() {
+      gapi.load('auth2', initAuth);
+      gapi.load('picker', onPickerApiLoad);
+    }
+
+    function initAuth() {
+      gapi.auth2.init({
+        'clientId': APP_ID,
+        'scope': SCOPES.join(' '),
+        'immediate': false
+      }).then(authInstance => {
+        document.getElementById('auth-button').onclick = () => {
+          authInstance.signIn();
+        };
+        if (authInstance.isSignedIn.get()) {
+          handleAuthResult(authInstance.currentUser.get());
+        } else {
+          document.getElementById('auth-button').style.display = 'block';
+          document.getElementById('upload-button').style.display = 'none';
+        }
+      });
+    }
+
+    function onPickerApiLoad() {
+      // Picker API is loaded
+    }
+
+    function handleAuthResult(user) {
+      document.getElementById('auth-button').style.display = 'none';
+      document.getElementById('upload-button').style.display = 'block';
+      token = user.getAuthResponse().access_token;
+      document.getElementById('upload-button').onclick = createPicker;
+    }
+
+    function createPicker() {
+      if (!token) {
+        document.getElementById('status').textContent = 'Error: No autorizado.';
+        return;
+      }
+      const view = new google.picker.View(google.picker.ViewId.DOCS);
+      view.setMimeTypes("text/xml,application/xml");
+
+      const picker = new google.picker.PickerBuilder()
+          .setAppId(APP_ID)
+          .setOAuthToken(token)
+          .addView(view)
+          .addView(new google.picker.DocsUploadView())
+          .setDeveloperKey(DEVELOPER_KEY)
+          .setCallback(pickerCallback)
+          .build();
+       picker.setVisible(true);
+    }
+
+    function pickerCallback(data) {
+      let status = '';
+      if (data[google.picker.Response.ACTION] == google.picker.Action.PICKED) {
+        const files = data[google.picker.Response.DOCUMENTS];
+        const fileIds = files.map(file => file.id);
+
+        if (fileIds.length > 0) {
+          document.getElementById('status').textContent = 'Procesando ' + fileIds.length + ' archivo(s)...';
+          google.script.run
+            .withSuccessHandler(response => {
+              document.getElementById('status').innerHTML = response;
+              setTimeout(() => google.script.host.close(), 3000);
+            })
+            .withFailureHandler(err => {
+              document.getElementById('status').textContent = 'Error: ' + err.message;
+            })
+            .processXmlFiles(fileIds);
+        } else {
+           status = 'No se seleccionaron archivos.';
+        }
+      } else if (data[google.picker.Response.ACTION] == google.picker.Action.CANCEL) {
+        status = 'Selección cancelada.';
+      }
+       if (status) {
+         document.getElementById('status').textContent = status;
+       }
+    }
+  </script>
+
+  <script async defer src="https://apis.google.com/js/api.js?onload=onApiLoad"></script>
+  <script async defer src="https://apis.google.com/js/platform.js"></script>
+
+</body>
+</html>
