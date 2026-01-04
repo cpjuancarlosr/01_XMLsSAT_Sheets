@@ -1,11 +1,10 @@
 /**
  * Suite de pruebas para el sistema de contabilidad.
  * Para ejecutar estas pruebas, abre el editor de Apps Script, selecciona la función
- * a ejecutar (e.g., `testGeneracionPolizaIngreso`) y haz clic en "Ejecutar".
- * Revisa los `Logger.log` en el registro de ejecuciones para ver los resultados.
+ * a ejecutar y haz clic en "Ejecutar". Revisa los `Logger.log` para ver los resultados.
  */
 
-// --- DATOS DE PRUEBA ---
+// --- DATOS DE PRUEBA UNITARIA ---
 const mockCfdiIngreso = {
   fecha: new Date(),
   uuid: 'A1B2C3D4-E5F6-G7H8-I9J0-K1L2M3N4O5P6',
@@ -34,25 +33,12 @@ const mockCatalogoProveedores = new Map([
 
 // --- PRUEBAS UNITARIAS ---
 
-/**
- * Prueba unitaria para la generación de pólizas de ingreso.
- * Verifica que el Debe y el Haber sumen lo mismo (partida doble).
- */
 function testGeneracionPolizaIngreso() {
   Logger.log('--- Iniciando prueba: testGeneracionPolizaIngreso ---');
-
   const poliza = generarPolizaIngreso(mockCfdiIngreso);
-
-  let totalDebe = 0;
-  let totalHaber = 0;
-
-  poliza.forEach(movimiento => {
-    totalDebe += movimiento[3]; // Columna del Debe
-    totalHaber += movimiento[4]; // Columna del Haber
-  });
-
+  let totalDebe = poliza.reduce((sum, mov) => sum + mov[3], 0);
+  let totalHaber = poliza.reduce((sum, mov) => sum + mov[4], 0);
   Logger.log(`Total Debe: ${totalDebe.toFixed(2)}, Total Haber: ${totalHaber.toFixed(2)}`);
-
   if (totalDebe.toFixed(2) === totalHaber.toFixed(2) && totalDebe > 0) {
     Logger.log('✅ PRUEBA SUPERADA: La póliza de ingreso está balanceada.');
   } else {
@@ -60,25 +46,12 @@ function testGeneracionPolizaIngreso() {
   }
 }
 
-/**
- * Prueba unitaria para la generación de pólizas de egreso.
- * Verifica que el Debe y el Haber sumen lo mismo (partida doble).
- */
 function testGeneracionPolizaEgreso() {
   Logger.log('--- Iniciando prueba: testGeneracionPolizaEgreso ---');
-
   const poliza = generarPolizaEgreso(mockCfdiEgreso, mockCatalogoProveedores);
-
-  let totalDebe = 0;
-  let totalHaber = 0;
-
-  poliza.forEach(movimiento => {
-    totalDebe += movimiento[3]; // Columna del Debe
-    totalHaber += movimiento[4]; // Columna del Haber
-  });
-
+  let totalDebe = poliza.reduce((sum, mov) => sum + mov[3], 0);
+  let totalHaber = poliza.reduce((sum, mov) => sum + mov[4], 0);
   Logger.log(`Total Debe: ${totalDebe.toFixed(2)}, Total Haber: ${totalHaber.toFixed(2)}`);
-
   if (totalDebe.toFixed(2) === totalHaber.toFixed(2) && totalDebe > 0) {
     Logger.log('✅ PRUEBA SUPERADA: La póliza de egreso está balanceada.');
   } else {
@@ -89,42 +62,61 @@ function testGeneracionPolizaEgreso() {
 // --- PRUEBA DE INTEGRACIÓN ---
 
 /**
- * Simula el flujo completo de procesamiento de un archivo XML.
- * **Requiere configuración manual de un archivo de prueba en Google Drive.**
- * 1. Sube un archivo XML de prueba a tu Google Drive.
- * 2. Obtén su ID (de la URL, por ejemplo).
- * 3. Pega el ID en la variable `TEST_FILE_ID` de abajo.
- * 4. Ejecuta esta función desde el editor.
+ * Simula el flujo completo de procesamiento de un archivo XML local.
+ * Utiliza un string de un CFDI de prueba para simular la carga.
  */
-function testIntegracion_ProcesarXml() {
-  Logger.log('--- Iniciando prueba de integración: testIntegracion_ProcesarXml ---');
+function testIntegracion_ProcessLocalXml() {
+  Logger.log('--- Iniciando prueba de integración: testIntegracion_ProcessLocalXml ---');
 
-  // --- CONFIGURACIÓN REQUERIDA ---
-  const TEST_FILE_ID = 'ID_DE_TU_ARCHIVO_XML_DE_PRUEBA';
-  // --------------------------------
+  // Establecer un RFC de prueba para que el parser funcione
+  PropertiesService.getScriptProperties().setProperty('RFC_PROPIO', 'XEXX010101000');
 
-  if (TEST_FILE_ID === 'ID_DE_TU_ARCHIVO_XML_DE_PRUEBA') {
-    Logger.log('ADVERTENCIA: Debes configurar el ID de un archivo de prueba en la función testIntegracion_ProcesarXml.');
-    return;
-  }
+  const mockXmlContent = `
+  <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3"
+    Fecha="2023-01-15T10:00:00"
+    TipoDeComprobante="I"
+    SubTotal="100.00"
+    Total="116.00"
+    Moneda="MXN"
+    MetodoPago="PUE"
+    FormaPago="01">
+    <cfdi:Emisor Rfc="EKU9003173C9" Nombre="EMPRESA EMISORA SA DE CV"/>
+    <cfdi:Receptor Rfc="XEXX010101000" Nombre="NUESTRA EMPRESA SA DE CV"/>
+    <cfdi:Conceptos>
+      <cfdi:Concepto Cantidad="1" Descripcion="PRODUCTO" ValorUnitario="100.00" Importe="100.00"/>
+    </cfdi:Conceptos>
+    <cfdi:Impuestos TotalImpuestosTrasladados="16.00">
+      <cfdi:Traslados>
+        <cfdi:Traslado Impuesto="002" TasaOCuota="0.160000" Importe="16.00"/>
+      </cfdi:Traslados>
+    </cfdi:Impuestos>
+    <cfdi:Complemento>
+      <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" UUID="TEST-UUID-12345" />
+    </cfdi:Complemento>
+  </cfdi:Comprobante>`;
 
   // Limpiar hojas de prueba antes de ejecutar
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetIngresos = ss.getSheetByName(SHEETS.REGISTRO_INGRESOS);
   const sheetEgresos = ss.getSheetByName(SHEETS.REGISTRO_EGRESOS);
   const sheetDiario = ss.getSheetByName(SHEETS.LIBRO_DIARIO);
 
-  if(sheetIngresos) sheetIngresos.clear();
-  if(sheetEgresos) sheetEgresos.clear();
-  if(sheetDiario) sheetDiario.clear();
+  if(sheetEgresos) {
+    // No borrar encabezados
+    if (sheetEgresos.getLastRow() > 1) {
+      sheetEgresos.deleteRows(2, sheetEgresos.getLastRow() - 1);
+    }
+  }
+  if(sheetDiario) {
+    if (sheetDiario.getLastRow() > 1) {
+      sheetDiario.deleteRows(2, sheetDiario.getLastRow() - 1);
+    }
+  }
 
-  // Ejecutar el proceso
-  const resultado = processXmlFiles([TEST_FILE_ID]);
+  // Ejecutar el proceso con el contenido del XML de prueba
+  const resultado = processLocalXmlFiles([mockXmlContent]);
   Logger.log(resultado);
 
   // Verificación
-  // La verificación real requeriría leer las hojas y Aserciones,
-  // pero para este entorno, revisaremos manualmente que se hayan añadido filas.
   const numRowsDiario = sheetDiario ? sheetDiario.getLastRow() : 0;
 
   if (numRowsDiario > 1) { // 1 para el encabezado

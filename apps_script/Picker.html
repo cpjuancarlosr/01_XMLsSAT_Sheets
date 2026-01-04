@@ -4,116 +4,90 @@
   <base target="_top">
   <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
   <style>
-    #auth-button, #upload-button {
-      padding: 10px 20px;
-      font-size: 14px;
-      cursor: pointer;
+    body {
+      padding: 20px;
+      font-family: Arial, sans-serif;
+    }
+    #upload-form {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
     }
     #status {
       margin-top: 15px;
       font-style: italic;
+      color: #333;
+    }
+    .button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    .button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
     }
   </style>
 </head>
 <body>
-  <div style="padding: 20px;">
-    <h2>Cargador de CFDI XML</h2>
-    <p>Haz clic en el botón para seleccionar los archivos XML que deseas procesar desde tu Google Drive.</p>
-    <button id="auth-button" style="display: none;">Autorizar</button>
-    <button id="upload-button">Seleccionar Archivos</button>
-    <div id="status"></div>
-  </div>
+  <h2>Cargador de CFDI XML</h2>
+  <p>Selecciona los archivos XML desde tu computadora para procesarlos.</p>
 
-  <script type="text/javascript">
-    const DEVELOPER_KEY = 'YOUR_API_KEY'; // Reemplazar con tu API Key de Google Cloud
-    const APP_ID = 'YOUR_APP_ID'; // Reemplazar con tu App ID de Google Cloud
-    const SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
-    let token = null;
+  <form id="upload-form">
+    <input type="file" id="xml-files" accept=".xml,text/xml" multiple>
+    <button type="submit" class="button" id="submit-button">Cargar y Procesar</button>
+  </form>
 
-    function onApiLoad() {
-      gapi.load('auth2', initAuth);
-      gapi.load('picker', onPickerApiLoad);
-    }
+  <div id="status"></div>
 
-    function initAuth() {
-      gapi.auth2.init({
-        'clientId': APP_ID,
-        'scope': SCOPES.join(' '),
-        'immediate': false
-      }).then(authInstance => {
-        document.getElementById('auth-button').onclick = () => {
-          authInstance.signIn();
-        };
-        if (authInstance.isSignedIn.get()) {
-          handleAuthResult(authInstance.currentUser.get());
-        } else {
-          document.getElementById('auth-button').style.display = 'block';
-          document.getElementById('upload-button').style.display = 'none';
-        }
-      });
-    }
+  <script>
+    const form = document.getElementById('upload-form');
+    const fileInput = document.getElementById('xml-files');
+    const submitButton = document.getElementById('submit-button');
+    const statusDiv = document.getElementById('status');
 
-    function onPickerApiLoad() {
-      // Picker API is loaded
-    }
+    form.addEventListener('submit', event => {
+      event.preventDefault();
 
-    function handleAuthResult(user) {
-      document.getElementById('auth-button').style.display = 'none';
-      document.getElementById('upload-button').style.display = 'block';
-      token = user.getAuthResponse().access_token;
-      document.getElementById('upload-button').onclick = createPicker;
-    }
-
-    function createPicker() {
-      if (!token) {
-        document.getElementById('status').textContent = 'Error: No autorizado.';
+      if (fileInput.files.length === 0) {
+        statusDiv.textContent = 'Por favor, selecciona al menos un archivo.';
         return;
       }
-      const view = new google.picker.View(google.picker.ViewId.DOCS);
-      view.setMimeTypes("text/xml,application/xml");
 
-      const picker = new google.picker.PickerBuilder()
-          .setAppId(APP_ID)
-          .setOAuthToken(token)
-          .addView(view)
-          .addView(new google.picker.DocsUploadView())
-          .setDeveloperKey(DEVELOPER_KEY)
-          .setCallback(pickerCallback)
-          .build();
-       picker.setVisible(true);
-    }
+      submitButton.disabled = true;
+      statusDiv.innerHTML = `Leyendo ${fileInput.files.length} archivo(s)...`;
 
-    function pickerCallback(data) {
-      let status = '';
-      if (data[google.picker.Response.ACTION] == google.picker.Action.PICKED) {
-        const files = data[google.picker.Response.DOCUMENTS];
-        const fileIds = files.map(file => file.id);
+      const promises = Array.from(fileInput.files).map(file => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target.result);
+          reader.onerror = e => reject(new Error('Error al leer el archivo: ' + file.name));
+          reader.readAsText(file);
+        });
+      });
 
-        if (fileIds.length > 0) {
-          document.getElementById('status').textContent = 'Procesando ' + fileIds.length + ' archivo(s)...';
+      Promise.all(promises)
+        .then(fileContents => {
+          statusDiv.innerHTML = 'Procesando en el servidor...';
           google.script.run
             .withSuccessHandler(response => {
-              document.getElementById('status').innerHTML = response;
-              setTimeout(() => google.script.host.close(), 3000);
+              statusDiv.innerHTML = response;
+              submitButton.disabled = false;
+               setTimeout(() => google.script.host.close(), 4000);
             })
             .withFailureHandler(err => {
-              document.getElementById('status').textContent = 'Error: ' + err.message;
+              statusDiv.textContent = 'Error: ' + err.message;
+              submitButton.disabled = false;
             })
-            .processXmlFiles(fileIds);
-        } else {
-           status = 'No se seleccionaron archivos.';
-        }
-      } else if (data[google.picker.Response.ACTION] == google.picker.Action.CANCEL) {
-        status = 'Selección cancelada.';
-      }
-       if (status) {
-         document.getElementById('status').textContent = status;
-       }
-    }
+            .processLocalXmlFiles(fileContents);
+        })
+        .catch(error => {
+          statusDiv.textContent = error.message;
+          submitButton.disabled = false;
+        });
+    });
   </script>
-
-  <script async defer src="https://apis.google.com/js/api.js?onload=onApiLoad"></script>
-  <script async defer src="https://apis.google.com/js/platform.js"></script>
-
 </body>
 </html>

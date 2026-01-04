@@ -14,7 +14,6 @@ Este documento proporciona las instrucciones para configurar y utilizar la herra
         *   `SheetManager.gs`
         *   `XMLParser.gs`
         *   `Picker.html`
-        *   (Opcional) `SAT_Downloader.gs` (si deseas usar la funcionalidad de descarga masiva)
 3.  **Establecer Propiedades del Script:**
     *   En el editor de Apps Script, ve a `Configuración del proyecto` (el icono del engranaje ⚙️).
     *   En la sección `Propiedades del secuencia de comandos`, haz clic en `Añadir propiedad de la secuencia de comandos`.
@@ -23,33 +22,7 @@ Este documento proporciona las instrucciones para configurar y utilizar la herra
         *   **Valor:** `TU_RFC_AQUI` (reemplaza con el RFC de tu empresa)
     *   Guarda los cambios.
 
-## 2. Configuración de Google Cloud y API Picker
-
-Para que el selector de archivos de Google Drive funcione, debes vincular tu proyecto de Apps Script a un proyecto de Google Cloud y habilitar las APIs necesarias.
-
-1.  **Crear un Proyecto en Google Cloud:** Ve a la [Consola de Google Cloud](https://console.cloud.google.com/) y crea un nuevo proyecto.
-2.  **Vincular Proyecto:**
-    *   En el editor de Apps Script, ve a `Configuración del proyecto` ⚙️.
-    *   En la sección `Proyecto de Google Cloud`, haz clic en `Cambiar proyecto`.
-    *   Pega el **Número de proyecto** de Google Cloud y haz clic en `Establecer proyecto`.
-3.  **Habilitar APIs:**
-    *   En tu proyecto de Google Cloud, ve a `APIs y servicios` > `Biblioteca`.
-    *   Busca y habilita las siguientes APIs:
-        *   **Google Drive API**
-        *   **Google Picker API**
-4.  **Crear Credenciales:**
-    *   Ve a `APIs y servicios` > `Credenciales`.
-    *   Haz clic en `+ CREAR CREDENCIALES` y selecciona `Clave de API`. Copia esta clave.
-    *   Vuelve a hacer clic en `+ CREAR CREDENCIALES` y selecciona `ID de cliente de OAuth`.
-        *   Tipo de aplicación: `Aplicación web`.
-        *   En `URI de redireccionamiento autorizados`, añade la URL que te proporciona Apps Script. Para encontrarla, ve a `Implementar` > `Nueva implementación` en el editor de script y busca el `ID de implementación` bajo `Aplicación web`. La URL será `https://script.google.com/macros/d/{ID_IMPLEMENTACION}/usercallback`.
-        *   Copia el `ID de cliente`.
-5.  **Actualizar el Código HTML:**
-    *   Abre el archivo `Picker.html` en el editor de Apps Script.
-    *   Reemplaza `'YOUR_API_KEY'` con la **Clave de API** que creaste.
-    *   Reemplaza `'YOUR_APP_ID'` con el **ID de cliente** que creaste.
-
-## 3. Estructura de Hojas de Cálculo
+## 2. Estructura de Hojas de Cálculo
 
 Crea las siguientes hojas en tu Google Sheet con los nombres y columnas exactos.
 
@@ -78,7 +51,7 @@ Crea las siguientes hojas en tu Google Sheet con los nombres y columnas exactos.
 
 ---
 
-## 4. Hojas de Reportes (Fórmulas)
+## 3. Hojas de Reportes (Fórmulas)
 
 Crea las siguientes hojas y pega las fórmulas en la celda indicada.
 
@@ -114,13 +87,14 @@ Crea las siguientes hojas y pega las fórmulas en la celda indicada.
     *   Añadir una fila para la `Utilidad del Ejercicio` que tome el valor del Estado de Resultados.
     *   Verificar la ecuación contable: **Total Activo = Total Pasivo + Capital**.
 
-## 5. Instrucciones de Uso
+## 4. Instrucciones de Uso
 
 1.  **Poblar Catálogos:** Llena las hojas `CatalogoCuentas` y `CatalogoProveedores` con tu información.
 2.  **Recargar la Hoja:** Guarda los cambios y recarga la hoja de cálculo para que aparezca el menú personalizado.
 3.  **Cargar XML:**
-    *   Ve al menú `Contabilidad Automatizada` > `Cargar XML desde Drive`.
-    *   La primera vez, se te pedirá que autorices los permisos para el script.
-    *   Se abrirá un selector de archivos. Elige los archivos XML que deseas procesar.
-    *   El sistema procesará los archivos, validará duplicados y generará las pólizas automáticamente.
+    *   Ve al menú `Contabilidad Automatizada` > `Cargar XML desde PC`.
+    *   La primera vez, se te pedirá que autorices los permisos para que el script se ejecute.
+    *   Se abrirá un cuadro de diálogo. Haz clic en el botón para seleccionar archivos y elige los XML desde tu computadora.
+    *   Haz clic en "Cargar y Procesar".
+    *   El sistema leerá los archivos, los procesará, validará duplicados y generará las pólizas automáticamente.
     *   Revisa las hojas de registro y el `LibroDiario` para ver los resultados.

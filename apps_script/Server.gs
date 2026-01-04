@@ -1,15 +1,15 @@
 /**
  * @OnlyCurrentDoc
  *
- * Función principal que se llama desde la interfaz de usuario del selector de archivos.
- * Orquesta el proceso de leer, parsear, validar y registrar cada CFDI XML.
+ * Función principal llamada desde la UI. Procesa el contenido de los archivos XML.
+ * Orquesta el proceso de parsear, validar y registrar cada CFDI.
  *
- * @param {string[]} fileIds Array de IDs de los archivos de Google Drive seleccionados.
+ * @param {string[]} xmlContents Array de strings, donde cada string es el contenido de un archivo XML.
  * @returns {string} Un mensaje de resumen para el usuario.
  */
-function processXmlFiles(fileIds) {
-  if (!fileIds || fileIds.length === 0) {
-    return "No se seleccionaron archivos.";
+function processLocalXmlFiles(xmlContents) {
+  if (!xmlContents || xmlContents.length === 0) {
+    return "No se procesaron archivos.";
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -23,11 +23,9 @@ function processXmlFiles(fileIds) {
   let duplicados = 0;
   let errores = 0;
 
-  fileIds.forEach(id => {
+  xmlContents.forEach((xmlTexto, index) => {
     try {
-      const file = DriveApp.getFileById(id);
-      const xmlTexto = file.getBlob().getDataAsString('UTF-8');
-
+      // El contenido del XML ya se pasa directamente
       const cfdiData = parseCfdi(xmlTexto);
 
       // 1. Validación de duplicados por UUID
@@ -53,7 +51,7 @@ function processXmlFiles(fileIds) {
       procesados++;
 
     } catch (e) {
-      Logger.log(`Error procesando el archivo con ID ${id}: ${e.message} \n ${e.stack}`);
+      Logger.log(`Error procesando el archivo #${index + 1}: ${e.message} \n ${e.stack}`);
       errores++;
     }
   });

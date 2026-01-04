@@ -7,7 +7,7 @@
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Contabilidad Automatizada')
-    .addItem('Cargar XML desde Drive', 'showPicker')
+    .addItem('Cargar XML desde PC', 'showPicker')
     .addToUi();
 }
 
