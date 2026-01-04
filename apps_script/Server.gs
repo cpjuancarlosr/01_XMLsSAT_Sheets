@@ -2,7 +2,7 @@
  * @OnlyCurrentDoc
  *
  * Función principal llamada desde la UI. Procesa el contenido de los archivos XML.
- * Orquesta el proceso de parsear, validar y registrar cada CFDI.
+ * Orquesta el proceso de parsear, validar y registrar cada CFDI, ahora con lógica avanzada.
  *
  * @param {string[]} xmlContents Array de strings, donde cada string es el contenido de un archivo XML.
  * @returns {string} Un mensaje de resumen para el usuario.
@@ -12,46 +12,50 @@ function processLocalXmlFiles(xmlContents) {
     return "No se procesaron archivos.";
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetIngresos = ss.getSheetByName(SHEETS.REGISTRO_INGRESOS);
-  const sheetEgresos = ss.getSheetByName(SHEETS.REGISTRO_EGRESOS);
-
-  // Cargar catálogos una sola vez para eficiencia
+  // Cargar todos los catálogos necesarios al inicio
   const catalogoProveedores = getCatalog(SHEETS.CATALOGO_PROVEEDORES);
+  const catalogoProdServ = getCatalog(SHEETS.CATALOGO_PROD_SERV);
+
+  let cfdis = [];
+  try {
+    cfdis = xmlContents.map(xml => parseCfdi(xml));
+  } catch (e) {
+    return `Error crítico durante el parseo inicial: ${e.message}. Verifique los archivos.`;
+  }
+
+  // Ordenar los CFDI por fecha para procesar facturas antes que sus pagos
+  cfdis.sort((a, b) => a.fecha - b.fecha);
 
   let procesados = 0;
   let duplicados = 0;
   let errores = 0;
 
-  xmlContents.forEach((xmlTexto, index) => {
-    try {
-      // El contenido del XML ya se pasa directamente
-      const cfdiData = parseCfdi(xmlTexto);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-      // 1. Validación de duplicados por UUID
-      const sheetDestino = cfdiData.tipoContable === 'Ingreso' ? sheetIngresos : sheetEgresos;
+  cfdis.forEach((cfdiData, index) => {
+    try {
+      // Validación de duplicados por UUID en la hoja correspondiente
+      let sheetDestino;
+      if (cfdiData.tipoComprobante === 'I') sheetDestino = ss.getSheetByName(SHEETS.REGISTRO_INGRESOS);
+      else if (cfdiData.tipoComprobante === 'E') sheetDestino = ss.getSheetByName(SHEETS.REGISTRO_EGRESOS);
+      else if (cfdiData.tipoComprobante === 'P') sheetDestino = ss.getSheetByName(SHEETS.REGISTRO_PAGOS);
+
       if (findRowByUuid(cfdiData.uuid, sheetDestino)) {
         Logger.log(`CFDI duplicado omitido: ${cfdiData.uuid}`);
         duplicados++;
-        return; // Continuar con el siguiente archivo
+        return;
       }
 
-      // 2. Generación de la póliza contable
-      let poliza;
-      if (cfdiData.tipoContable === 'Ingreso') {
-        poliza = generarPolizaIngreso(cfdiData);
-      } else {
-        poliza = generarPolizaEgreso(cfdiData, catalogoProveedores);
-      }
-
-      // 3. Escritura en Hojas de Cálculo
+      // Escritura del registro del CFDI
       writeCfdiData(cfdiData);
-      writePoliza(poliza);
+
+      // Creación de la póliza contable
+      crearPolizaDesdeCfdi(cfdiData, catalogoProveedores, catalogoProdServ);
 
       procesados++;
 
     } catch (e) {
-      Logger.log(`Error procesando el archivo #${index + 1}: ${e.message} \n ${e.stack}`);
+      Logger.log(`Error procesando el CFDI con UUID ${cfdiData.uuid || `(archivo #${index + 1})`}: ${e.message} \n ${e.stack}`);
       errores++;
     }
   });

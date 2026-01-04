@@ -1,5 +1,6 @@
 /**
- * Parsea el contenido de un string XML de un CFDI y extrae los datos más importantes.
+ * Parsea el contenido de un string XML de un CFDI 4.0 y extrae los datos más importantes.
+ * Distingue entre facturas (Ingreso/Egreso) y complementos de pago.
  * @param {string} xmlTexto El contenido del archivo XML.
  * @returns {object} Un objeto con los datos extraídos del CFDI.
  */
@@ -7,81 +8,80 @@ function parseCfdi(xmlTexto) {
   const documento = XmlService.parse(xmlTexto);
   const root = documento.getRootElement();
 
-  // Namespace para el Timbre Fiscal Digital
   const nsCfdi = root.getNamespace();
   const nsTfd = XmlService.getNamespace('tfd', 'http://www.sat.gob.mx/TimbreFiscalDigital');
 
-  const tipoRaw = obtenerAtributo(root, ['TipoDeComprobante']);
-  const tipo = normalizarTipo(tipoRaw);
+  const tipoComprobante = obtenerAtributo(root, ['TipoDeComprobante']);
 
-  const fechaStr = obtenerAtributo(root, ['Fecha']);
-  if (!fechaStr) {
-    throw new Error('El CFDI no tiene atributo Fecha');
+  if (tipoComprobante === 'P') {
+    return parseComplementoPago(root, nsCfdi, nsTfd);
+  } else {
+    return parseFactura(root, nsCfdi, nsTfd);
   }
-  const fecha = new Date(fechaStr);
+}
 
-  const emisor = extraerEmisor(root, nsCfdi);
-  const receptor = extraerReceptor(root, nsCfdi);
-  const impuestos = extraerImpuestos(root, nsCfdi);
-  const totales = extraerTotales(root);
-  const uuid = extraerUuid(root, nsTfd);
-
-  // Determinar si es Ingreso o Egreso para nuestra contabilidad
-  // Esto se basa en quién es el receptor. Se debe configurar el RFC de la propia empresa.
+/**
+ * Parsea un CFDI de tipo Ingreso o Egreso.
+ */
+function parseFactura(root, nsCfdi, nsTfd) {
   const props = PropertiesService.getScriptProperties();
   const rfcPropio = props.getProperty('RFC_PROPIO');
   if (!rfcPropio) {
-    throw new Error('La propiedad "RFC_PROPIO" no está configurada en las propiedades del script.');
+    throw new Error('La propiedad "RFC_PROPIO" no está configurada.');
   }
+
+  const emisor = extraerEmisor(root, nsCfdi);
+  const receptor = extraerReceptor(root, nsCfdi);
+
   const tipoContable = (receptor.rfc.toUpperCase() === rfcPropio.toUpperCase()) ? 'Egreso' : 'Ingreso';
 
   return {
-    uuid: uuid,
-    fecha: fecha,
-    tipoComprobante: tipo, // I, E, T, P, N
-    tipoContable: tipoContable, // Ingreso, Egreso
+    uuid: extraerUuid(root, nsTfd),
+    fecha: new Date(obtenerAtributo(root, ['Fecha'])),
+    tipoComprobante: obtenerAtributo(root, ['TipoDeComprobante']),
+    tipoContable: tipoContable,
+    metodoPago: obtenerAtributo(root, ['MetodoPago']),
+    formaPago: obtenerAtributo(root, ['FormaPago']),
     emisorRfc: emisor.rfc,
     emisorNombre: emisor.nombre,
     receptorRfc: receptor.rfc,
     receptorNombre: receptor.nombre,
-    moneda: obtenerAtributo(root, ['Moneda']),
-    subtotal: parseFloat(totales.subtotal || 0),
-    total: parseFloat(totales.total || 0),
-    formaPago: obtenerAtributo(root, ['FormaPago']),
-    metodoPago: obtenerAtributo(root, ['MetodoPago']),
-    impuestosTrasladados: parseFloat(impuestos.trasladados || 0),
-    impuestosRetenidos: parseFloat(impuestos.retenidos || 0),
+    subtotal: parseFloat(obtenerAtributo(root, ['SubTotal']) || 0),
+    total: parseFloat(obtenerAtributo(root, ['Total']) || 0),
+    impuestosTrasladados: parseFloat(extraerTotalImpuestos(root, nsCfdi, 'Traslados') || 0),
+    impuestosRetenidos: parseFloat(extraerTotalImpuestos(root, nsCfdi, 'Retenciones') || 0),
+    conceptos: extraerConceptos(root, nsCfdi),
   };
 }
 
 /**
- * Normaliza el tipo de comprobante a un valor conocido (I, E, T, P, N).
- * @param {string} tipo El valor del atributo TipoDeComprobante.
- * @returns {string} El tipo normalizado.
+ * Parsea un CFDI de tipo Pago (Complemento de Pago).
  */
-function normalizarTipo(tipo) {
-  if (!tipo) return 'N/A';
-  const upper = tipo.toUpperCase().trim();
-  switch (upper) {
-    case 'I':
-    case 'INGRESO':
-      return 'I';
-    case 'E':
-    case 'EGRESO':
-      return 'E';
-    case 'T':
-    case 'TRASLADO':
-      return 'T';
-    case 'P':
-    case 'PAGO':
-      return 'P';
-    case 'N':
-    case 'NOMINA':
-      return 'N';
-    default:
-      return upper;
-  }
+function parseComplementoPago(root, nsCfdi, nsTfd) {
+  const nsPago = XmlService.getNamespace('pago20', 'http://www.sat.gob.mx/Pagos20');
+  const complemento = root.getChild('Complemento', nsCfdi);
+  const pago = complemento.getChild('Pago', nsPago);
+
+  const documentosRelacionados = [];
+  const doctoRelacionadoNodes = pago.getChildren('DoctoRelacionado', nsPago);
+
+  doctoRelacionadoNodes.forEach(nodo => {
+    documentosRelacionados.push({
+      uuidRelacionado: obtenerAtributo(nodo, ['IdDocumento']),
+      montoPagado: parseFloat(obtenerAtributo(nodo, ['ImpPagado']) || 0),
+      parcialidad: parseInt(obtenerAtributo(nodo, ['NumParcialidad']) || 1),
+    });
+  });
+
+  return {
+    uuid: extraerUuid(root, nsTfd),
+    fecha: new Date(obtenerAtributo(pago, ['FechaPago'])),
+    tipoComprobante: 'P',
+    montoTotalPago: parseFloat(obtenerAtributo(pago, ['Monto']) || 0),
+    documentosRelacionados: documentosRelacionados,
+  };
 }
+
 
 // --- FUNCIONES AUXILIARES DE PARSEO ---
 
@@ -96,42 +96,12 @@ function obtenerAtributo(elemento, nombres) {
 
 function extraerEmisor(root, ns) {
   const emisor = root.getChild('Emisor', ns);
-  if (!emisor) return { rfc: null, nombre: null };
-  return {
-    rfc: obtenerAtributo(emisor, ['Rfc']),
-    nombre: obtenerAtributo(emisor, ['Nombre']),
-  };
+  return { rfc: obtenerAtributo(emisor, ['Rfc']), nombre: obtenerAtributo(emisor, ['Nombre']) };
 }
 
 function extraerReceptor(root, ns) {
   const receptor = root.getChild('Receptor', ns);
-  if (!receptor) return { rfc: null, nombre: null };
-  return {
-    rfc: obtenerAtributo(receptor, ['Rfc']),
-    nombre: obtenerAtributo(receptor, ['Nombre']),
-  };
-}
-
-function extraerImpuestos(root, ns) {
-  const impuestosNode = root.getChild('Impuestos', ns);
-  if (!impuestosNode) return { trasladados: 0, retenidos: 0 };
-
-  // Ahora, en lugar de buscar una tasa específica, usamos el total de impuestos trasladados
-  // que el propio emisor del CFDI ha calculado. Esto es más robusto.
-  const totalTraslados = parseFloat(obtenerAtributo(impuestosNode, ['TotalImpuestosTrasladados']) || 0);
-
-  return {
-    trasladados: totalTraslados,
-    retenidos: parseFloat(obtenerAtributo(impuestosNode, ['TotalImpuestosRetenidos']) || 0),
-  };
-}
-
-
-function extraerTotales(root) {
-  return {
-    subtotal: obtenerAtributo(root, ['SubTotal']),
-    total: obtenerAtributo(root, ['Total']),
-  };
+  return { rfc: obtenerAtributo(receptor, ['Rfc']), nombre: obtenerAtributo(receptor, ['Nombre']) };
 }
 
 function extraerUuid(root, ns) {
@@ -140,4 +110,25 @@ function extraerUuid(root, ns) {
   const timbre = complemento.getChild('TimbreFiscalDigital', ns);
   if (!timbre) return null;
   return obtenerAtributo(timbre, ['UUID']);
+}
+
+function extraerTotalImpuestos(root, ns, tipoImpuesto) { // tipoImpuesto: "Traslados" o "Retenciones"
+  const impuestosNode = root.getChild('Impuestos', ns);
+  if (!impuestosNode) return 0;
+  return obtenerAtributo(impuestosNode, [`TotalImpuestos${tipoImpuesto}`]);
+}
+
+function extraerConceptos(root, ns) {
+  const conceptos = [];
+  const conceptosNode = root.getChild('Conceptos', ns);
+  if (conceptosNode) {
+    const listaConceptos = conceptosNode.getChildren('Concepto', ns);
+    listaConceptos.forEach(concepto => {
+      conceptos.push({
+        claveProdServ: obtenerAtributo(concepto, ['ClaveProdServ']),
+        importe: parseFloat(obtenerAtributo(concepto, ['Importe']) || 0),
+      });
+    });
+  }
+  return conceptos;
 }
