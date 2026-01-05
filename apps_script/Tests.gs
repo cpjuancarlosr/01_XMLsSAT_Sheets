@@ -21,12 +21,6 @@ const SpreadsheetApp = {
   getActiveSpreadsheet: function() { return mockSheetCxC; }
 };
 
-const CUENTAS_PREDETERMINADAS = {
-  BANCOS: '102-Bancos', CLIENTES: '105-Clientes', PROVEEDORES: '201-Proveedores',
-  VENTAS: '401-Ventas', GASTOS_GENERALES: '601-Gastos Generales', IVA_ACREDITABLE: '118-IVA Acreditable',
-  IVA_POR_ACREDITAR: '119-IVA por Acreditar', IVA_TRASLADADO: '208-IVA Trasladado', IVA_POR_TRASLADAR: '209-IVA por Trasladar',
-};
-
 // --- DATOS DE PRUEBA ---
 
 const mockCfdiEgresoPUE = {
