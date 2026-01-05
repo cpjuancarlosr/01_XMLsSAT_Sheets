@@ -1,18 +1,26 @@
 /**
  * @OnlyCurrentDoc
  *
- * The onOpen function runs automatically when the spreadsheet is opened.
- * It creates a custom menu for the user to interact with the system.
+ * Se ejecuta automáticamente al abrir la hoja de cálculo.
+ * Configura el espacio de trabajo y crea los menús personalizados.
  */
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('Contabilidad Automatizada')
+  // Asegura que todas las hojas necesarias existan antes de configurar la UI
+  setupWorkspace();
+
+  const ui = SpreadsheetApp.getUi();
+
+  ui.createMenu('Contabilidad Automatizada')
     .addItem('Cargar XML desde PC', 'showPicker')
+    .addToUi();
+
+  ui.createMenu('Estilo')
+    .addItem('Aplicar Tema Industrial Moderno', 'applyModernIndustrialTheme')
     .addToUi();
 }
 
 /**
- * Displays an HTML sidebar interface that allows the user to select XML files from Google Drive.
+ * Muestra el cuadro de diálogo para seleccionar archivos XML locales.
  */
 function showPicker() {
   const html = HtmlService.createHtmlOutputFromFile('Picker')

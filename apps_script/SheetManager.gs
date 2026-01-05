@@ -31,6 +31,11 @@ const HEADERS_DIARIO = [
   'Folio', 'Fecha', 'Cuenta', 'Descripción', 'Debe', 'Haber', 'UUID Ref'
 ];
 
+const HEADERS_CATALOGO_CUENTAS = ['Número de Cuenta', 'Nombre de Cuenta'];
+const HEADERS_CATALOGO_PROVEEDORES = ['RFC del Proveedor', 'Cuenta Contable Asignada'];
+const HEADERS_CATALOGO_PROD_SERV = ['ClaveProdServ SAT', 'Cuenta Contable Asignada'];
+
+
 // --- FUNCIONES DE ESCRITURA Y LECTURA ---
 
 /**
@@ -208,4 +213,33 @@ function getCatalog(catalogName) {
     }
   }
   return catalogMap;
+}
+
+/**
+ * Verifica y crea todas las hojas de cálculo necesarias para el sistema si no existen.
+ * Esta función asegura que el espacio de trabajo esté correctamente configurado al abrir el archivo.
+ */
+function setupWorkspace() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const requiredSheets = {
+    [SHEETS.CATALOGO_CUENTAS]: HEADERS_CATALOGO_CUENTAS,
+    [SHEETS.CATALOGO_PROVEEDORES]: HEADERS_CATALOGO_PROVEEDORES,
+    [SHEETS.CATALOGO_PROD_SERV]: HEADERS_CATALOGO_PROD_SERV,
+    [SHEETS.CXC_CXP]: HEADERS_CXC_CXP,
+    [SHEETS.LIBRO_DIARIO]: HEADERS_DIARIO,
+    [SHEETS.REGISTRO_INGRESOS]: HEADERS_CFDI_IE,
+    [SHEETS.REGISTRO_EGRESOS]: HEADERS_CFDI_IE,
+    [SHEETS.REGISTRO_PAGOS]: HEADERS_CFDI_P,
+  };
+
+  for (const sheetName in requiredSheets) {
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      const headers = requiredSheets[sheetName];
+      sheet.appendRow(headers);
+      sheet.setFrozenRows(1);
+      Logger.log(`Hoja "${sheetName}" creada.`);
+    }
+  }
 }
