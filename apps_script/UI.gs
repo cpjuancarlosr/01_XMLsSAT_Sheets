@@ -2,25 +2,27 @@
  * @OnlyCurrentDoc
  *
  * Se ejecuta automáticamente al abrir la hoja de cálculo.
- * Configura el espacio de trabajo y crea los menús personalizados.
+ * Crea los menús personalizados para interactuar con el sistema.
+ * Esta función se ejecuta en un modo que no requiere autorización, por lo que solo debe contener
+ * la creación de la UI (menús), no llamadas a funciones que modifiquen la hoja.
  */
 function onOpen() {
-  // Asegura que todas las hojas necesarias existan antes de configurar la UI
-  setupWorkspace();
-
   const ui = SpreadsheetApp.getUi();
 
-  ui.createMenu('Contabilidad Automatizada')
+  ui.createMenu('CONTABILIDAD')
     .addItem('Cargar XML desde PC', 'showPicker')
     .addToUi();
 
-  ui.createMenu('Estilo')
-    .addItem('Aplicar Tema Industrial Moderno', 'applyModernIndustrialTheme')
+  ui.createMenu('SISTEMA')
+    .addItem('1. Preparar Espacio de Trabajo', 'setupWorkspace')
+    .addSeparator()
+    .addItem('2. Aplicar Tema Visual', 'applyModernIndustrialTheme')
     .addToUi();
 }
 
 /**
  * Muestra el cuadro de diálogo para seleccionar archivos XML locales.
+ * Esta función será llamada desde el menú, por lo que tendrá los permisos necesarios.
  */
 function showPicker() {
   const html = HtmlService.createHtmlOutputFromFile('Picker')
